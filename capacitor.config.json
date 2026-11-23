@@ -1,0 +1,7 @@
+{
+  "appId": "com.joao.solarsw",
+  "appName": "Solar switch",
+  "webDir": "www",
+  "server": { "androidScheme": "http", "cleartext": true },
+  "plugins": { "CapacitorHttp": { "enabled": true } }
+}
