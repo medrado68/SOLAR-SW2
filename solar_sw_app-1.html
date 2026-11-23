@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar switch</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --paper:#e9edf0; --ink:#14202b; --muted:#566673; --line:#c4ced6;
+  --fill:#0e7c7b; --mark:#c4402a; --sun:#f2b705; --sun-ink:#2b2100;
+  --btn:#14202b; --btn-ink:#f4f7f9; --bad:#b3261e;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#0f161c; --ink:#e7eef3; --muted:#93a4b1; --line:#2c3a46;
+    --fill:#35b3b1; --mark:#ff7b5f; --btn:#e7eef3; --btn-ink:#0f161c; --bad:#ff8a80;
+  }
+}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{
+  margin:0;color:var(--ink);
+  font:16px/1.45 "Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+main{max-width:520px;margin:0 auto;padding:0 20px 56px}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 14px}
+h1{font-size:18px;font-weight:600;margin:0}
+.conn{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.conn.ok .dot{background:var(--fill)}
+section{border-top:1px solid var(--line);padding:20px 0}
+.k{font-size:14px;color:var(--muted)}
+.big{font-size:clamp(64px,22vw,96px);font-weight:300;line-height:1;letter-spacing:-.03em;margin-top:4px}
+.big small{font-size:.3em;letter-spacing:0;color:var(--muted);margin-left:6px}
+.stale .big,.stale .v{opacity:.45}
+
+.gauge{position:relative;height:14px;background:var(--line);border-radius:2px;margin:30px 0 6px}
+.fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--fill);border-radius:2px;transition:width .4s}
+.tick{position:absolute;top:-8px;bottom:-8px;width:0;border-left:2px solid var(--mark);display:none}
+.tick.off{border-left-style:dotted;opacity:.75}
+.tick span{position:absolute;bottom:100%;left:0;transform:translateX(-50%);white-space:nowrap;font-size:12px;color:var(--mark);margin-bottom:2px}
+.tick.right span{transform:translateX(-100%)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+.state{display:flex;align-items:center;gap:12px;margin-top:16px}
+.pill{padding:6px 14px;border-radius:999px;font-weight:600;background:var(--line);color:var(--ink)}
+.pill.on{background:var(--sun);color:var(--sun-ink)}
+.hint{font-size:14px;color:var(--muted);margin:10px 0 0}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.v{font-size:32px;font-weight:300;line-height:1.1;margin-top:2px}
+.v small{font-size:16px;color:var(--muted);margin-left:3px}
+.raw{font-size:12px;color:var(--muted);margin-top:2px}
+
+h2{font-size:16px;font-weight:600;margin:0 0 12px}
+label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+input{
+  width:100%;min-height:48px;padding:8px 12px;font:inherit;color:var(--ink);
+  background:transparent;border:1px solid var(--line);border-radius:6px;
+}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--fill);outline-offset:2px}
+.row{display:flex;gap:10px;align-items:flex-end}
+.row > div{flex:1}
+button{
+  min-height:48px;padding:8px 18px;font:inherit;font-weight:600;cursor:pointer;
+  color:var(--btn-ink);background:var(--btn);border:1px solid var(--btn);border-radius:6px;
+}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.seg button{background:transparent;color:var(--ink);border-color:var(--line)}
+.seg button.active{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.seg button.active.live{background:var(--sun);color:var(--sun-ink);border-color:var(--sun)}
+
+details{border-top:1px solid var(--line);padding:16px 0}
+summary{cursor:pointer;font-weight:600;min-height:32px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+#toast{
+  position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);
+  max-width:90vw;padding:10px 16px;border-radius:6px;background:var(--btn);color:var(--btn-ink);
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;font-size:14px;text-align:center;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Solar switch</h1>
+    <div class="conn" id="conn"><span class="dot"></span><span id="connTxt">Not connected</span></div>
+  </header>
+
+  <section id="hero">
+    <div class="k">AC input current</div>
+    <div class="big"><span id="amps">–</span><small>A</small></div>
+    <div class="gauge" id="gauge" role="img" aria-label="Current compared with the I-IN threshold">
+      <div class="fill" id="fill"></div>
+      <div class="tick on" id="tickOn"><span id="tickOnTxt"></span></div>
+      <div class="tick off" id="tickOff"></div>
+    </div>
+    <div class="scale"><span>0</span><span id="scaleMax">30 A</span></div>
+    <div class="state">
+      <span class="pill" id="pill">Switch off</span>
+      <span id="modeTxt" class="k"></span>
+    </div>
+    <p class="hint" id="hint"></p>
+  </section>
+
+  <section>
+    <div class="grid">
+      <div>
+        <div class="k">Solar voltage</div>
+        <div class="v"><span id="volts">–</span><small>V</small></div>
+        <div class="raw" id="rawV"></div>
+      </div>
+      <div>
+        <div class="k">Temperature</div>
+        <div class="v"><span id="temp">–</span><small>°C</small></div>
+        <div class="raw" id="rawT"></div>
+      </div>
+    </div>
+    <div class="raw" id="rawI" style="margin-top:14px"></div>
+  </section>
+
+  <section>
+    <h2>Turn-on current (I-IN)</h2>
+    <div class="row">
+      <div>
+        <label for="iinA" style="margin-top:0">Amps</label>
+        <input id="iinA" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 5.0">
+      </div>
+      <button id="sendIin">Send I-IN</button>
+    </div>
+    <div class="seg" id="seg">
+      <button id="bOn">Turn on</button>
+      <button id="bOff">Turn off</button>
+      <button id="bAuto">Auto</button>
+    </div>
+    <p class="note">Sending I-IN starts automatic control. Turn on and Turn off take over manually until you press Auto.</p>
+  </section>
+
+  <details id="settings">
+    <summary>Settings</summary>
+    <label for="ip">ESP32 address</label>
+    <input id="ip" type="text" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="192.168.4.1 or solarsw.local">
+    <p class="note">On the HEIMAT_2.4 network try solarsw.local first. If it does not answer, use the IP printed on the serial monitor (or on your router). On the backup network SOLAR_SW the address is 192.168.4.1.</p>
+
+    <div class="two">
+      <div><label for="cpa">ADC counts per amp</label><input id="cpa" type="number" step="0.01" inputmode="decimal"></div>
+      <div><label for="vfs">Volts at ADC 4095</label><input id="vfs" type="number" step="0.1" inputmode="decimal"></div>
+      <div><label for="rfix">NTC fixed resistor (Ω)</label><input id="rfix" type="number" step="1" inputmode="numeric"></div>
+      <div><label for="beta">NTC beta</label><input id="beta" type="number" step="1" inputmode="numeric"></div>
+    </div>
+
+    <label for="calA">Calibrate: current measured with a clamp meter (A)</label>
+    <div class="row">
+      <div><input id="calA" type="number" step="0.01" inputmode="decimal" placeholder="e.g. 9.0"></div>
+      <button class="ghost" id="calBtn">Calibrate</button>
+    </div>
+
+    <div class="two">
+      <div><label for="hyst">Turn off below (% of I-IN)</label><input id="hyst" type="number" step="1" min="10" max="95" inputmode="numeric"></div>
+      <div></div>
+      <div><label for="onD">Turn-on delay (s)</label><input id="onD" type="number" step="1" min="0" inputmode="numeric"></div>
+      <div><label for="offD">Turn-off delay (s)</label><input id="offD" type="number" step="1" min="0" inputmode="numeric"></div>
+    </div>
+    <div style="margin-top:16px"><button id="saveSet">Save settings</button></div>
+    <p class="note">Hysteresis and delays are stored in the ESP32. The rest stays on this phone.</p>
+  </details>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const DEF = {ip:'solarsw.local', cpa:42, vfs:42.9, rfix:10000, beta:3950};
+  let cfg = Object.assign({}, DEF);
+  try { cfg = Object.assign(cfg, JSON.parse(localStorage.getItem('solarsw') || '{}')); } catch(e) {}
+  const saveCfg = () => { try { localStorage.setItem('solarsw', JSON.stringify(cfg)); } catch(e) {} };
+
+  let last = null, online = false, polling = false, iinFilled = false, toastTimer = null;
+
+  function toast(msg, err){
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'show' + (err ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = ''; }, 3200);
+  }
+
+  async function api(path){
+    const base = cfg.ip.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (!base) throw new Error('Enter the ESP32 address in Settings');
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 3000);
+    try {
+      const r = await fetch('http://' + base + path, {signal: ctl.signal, cache: 'no-store'});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+      return j;
+    } catch(e) {
+      if (e.name === 'AbortError') throw new Error('No answer from the ESP32');
+      throw e;
+    } finally { clearTimeout(timer); }
+  }
+
+  function setOnline(ok, msg){
+    online = ok;
+    $('conn').className = 'conn' + (ok ? ' ok' : '');
+    $('connTxt').textContent = ok ? 'Connected' : (msg || 'Not connected');
+    $('hero').classList.toggle('stale', !ok);
+  }
+
+  function ntcTemp(adc){
+    if (adc <= 20 || adc >= 4075) return null;
+    const r = cfg.rfix * adc / (4095 - adc);
+    return 1 / (1/298.15 + Math.log(r/10000) / cfg.beta) - 273.15;
+  }
+
+  function render(){
+    const d = last;
+    if (!d) return;
+    const amps = d.adc_i / cfg.cpa;
+    const iinA = d.iin / cfg.cpa;
+    const offA = iinA * d.hyst / 100;
+
+    $('amps').textContent = amps.toFixed(1);
+    $('rawI').textContent = 'Current ADC (RMS) ' + d.adc_i.toFixed(0) + ' of 4095 · GPIO18 ' + (d.gpio ? 'HIGH' : 'LOW');
+
+    let max = Math.max(30, amps * 1.1, iinA * 1.3);
+    max = Math.ceil(max / 5) * 5;
+    $('scaleMax').textContent = max + ' A';
+    $('fill').style.width = Math.min(100, amps / max * 100) + '%';
+
+    const tOn = $('tickOn'), tOff = $('tickOff');
+    if (d.iin > 0) {
+      const p = Math.min(100, iinA / max * 100);
+      tOn.style.display = 'block'; tOn.style.left = p + '%';
+      tOn.classList.toggle('right', p > 80);
+      $('tickOnTxt').textContent = 'I-IN ' + iinA.toFixed(1) + ' A';
+      tOff.style.display = 'block'; tOff.style.left = Math.min(100, offA / max * 100) + '%';
+    } else { tOn.style.display = 'none'; tOff.style.display = 'none'; }
+
+    $('pill').textContent = d.sw ? 'Switch on' : 'Switch off';
+    $('pill').classList.toggle('on', !!d.sw);
+    $('modeTxt').textContent = d.mode === 'AUTO' ? 'Automatic' : 'Manual';
+    $('hint').textContent = d.iin > 0
+      ? 'Turns on above ' + iinA.toFixed(1) + ' A for ' + d.on_delay + ' s, off below ' + offA.toFixed(1) + ' A for ' + d.off_delay + ' s.'
+      : 'No I-IN set yet. Send one to start automatic control.';
+
+    const v = d.adc_v / 4095 * cfg.vfs;
+    $('volts').textContent = v.toFixed(1);
+    $('rawV').textContent = 'ADC ' + d.adc_v;
+    const t = ntcTemp(d.adc_temp);
+    $('temp').textContent = t === null ? 'check sensor' : t.toFixed(1);
+    $('rawT').textContent = 'ADC ' + d.adc_temp;
+
+    const auto = d.mode === 'AUTO';
+    $('bOn').className  = (!auto && d.sw) ? 'active live' : '';
+    $('bOff').className = (!auto && !d.sw) ? 'active' : '';
+    $('bAuto').className = auto ? 'active' : '';
+
+    if (!iinFilled && d.iin > 0) { $('iinA').value = iinA.toFixed(1); iinFilled = true; }
+    if (document.activeElement !== $('hyst')) $('hyst').value = d.hyst;
+    if (document.activeElement !== $('onD')) $('onD').value = d.on_delay;
+    if (document.activeElement !== $('offD')) $('offD').value = d.off_delay;
+  }
+
+  async function poll(){
+    if (polling) return;
+    polling = true;
+    try { last = await api('/status'); setOnline(true); render(); }
+    catch(e) { setOnline(false, e.message); }
+    finally { polling = false; }
+  }
+
+  async function send(path, okMsg){
+    try { last = await api(path); setOnline(true); render(); toast(okMsg); }
+    catch(e) { toast(e.message, true); }
+  }
+
+  $('sendIin').onclick = () => {
+    const a = parseFloat($('iinA').value);
+    if (!(a > 0)) return toast('Enter a current above 0 A', true);
+    const counts = Math.round(a * cfg.cpa * 10) / 10;
+    if (counts > 4095) return toast('Value too high for the ADC', true);
+    send('/set?iin=' + counts, 'I-IN sent: ' + a.toFixed(1) + ' A');
+  };
+  $('bOn').onclick   = () => send('/cmd?sw=on', 'Switch turned on');
+  $('bOff').onclick  = () => send('/cmd?sw=off', 'Switch turned off');
+  $('bAuto').onclick = () => send('/cmd?sw=auto', 'Automatic control on');
+
+  $('calBtn').onclick = () => {
+    const real = parseFloat($('calA').value);
+    if (!last || !online) return toast('Connect to the ESP32 first', true);
+    if (!(real > 0) || last.adc_i < 10) return toast('Need a load of at least 1 A on the wire', true);
+    cfg.cpa = Math.round(last.adc_i / real * 100) / 100;
+    $('cpa').value = cfg.cpa;
+    saveCfg(); render();
+    toast('Calibrated: ' + cfg.cpa + ' counts per A. Send I-IN again.');
+  };
+
+  $('saveSet').onclick = async () => {
+    cfg.ip = $('ip').value.trim();
+    const n = (id, d) => { const x = parseFloat($(id).value); return x > 0 ? x : d; };
+    cfg.cpa = n('cpa', cfg.cpa); cfg.vfs = n('vfs', cfg.vfs);
+    cfg.rfix = n('rfix', cfg.rfix); cfg.beta = n('beta', cfg.beta);
+    saveCfg();
+    const h = parseInt($('hyst').value, 10), on = parseInt($('onD').value, 10), off = parseInt($('offD').value, 10);
+    if (isNaN(h) || isNaN(on) || isNaN(off)) { render(); return toast('Settings saved on this phone'); }
+    send('/set?hyst=' + h + '&ondelay=' + on + '&offdelay=' + off, 'Settings saved');
+  };
+
+  $('ip').value = cfg.ip; $('cpa').value = cfg.cpa; $('vfs').value = cfg.vfs;
+  $('rfix').value = cfg.rfix; $('beta').value = cfg.beta;
+  if (!cfg.ip) $('settings').open = true;
+
+  poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>
